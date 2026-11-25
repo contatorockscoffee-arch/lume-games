@@ -1,0 +1,8 @@
+.library-tools{flex-wrap:wrap}
+.density-control{display:flex;align-items:center;gap:.5rem;color:var(--muted);font-size:.78rem;white-space:nowrap}
+.density-control input{width:115px;accent-color:var(--blue);cursor:pointer}
+.density-control output{min-width:42px;color:#dce7f7;font-variant-numeric:tabular-nums}
+.media-grid{grid-template-columns:repeat(auto-fill,minmax(var(--card-min,205px),1fr))}
+@media(max-width:600px){.density-control{width:100%}.density-control input{flex:1}}
+.desktop-queue{display:grid;gap:.8rem}.queue-card{border:1px solid var(--border);background:var(--panel);border-radius:12px;padding:1rem}.queue-card h3{margin:0;font-size:1rem;overflow-wrap:anywhere}.queue-card p{margin:.45rem 0;color:var(--muted);font-size:.88rem}.queue-card .progress-track{margin:.8rem 0 .45rem}.queue-metrics{display:flex;justify-content:space-between;gap:.8rem;color:var(--muted);font-size:.83rem}.queue-metrics strong{color:var(--cyan)}.queue-actions{display:flex;gap:.6rem;margin-top:.85rem}.queue-actions button{min-height:38px;padding:.55rem .8rem}
+
