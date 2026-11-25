@@ -3,6 +3,7 @@
 // bearer token issued by the independent Lume service.
 (()=>{
   const storageKey='lume-account-v1';
+  const defaultApiUrl='https://lume-api-production-1838468f.up.railway.app';
   const $=selector=>document.querySelector(selector);
   const status=$('#lumeAccountStatus'), apiInput=$('#lumeApiUrl'), emailInput=$('#lumeAccountEmail'), passwordInput=$('#lumeAccountPassword');
   if(!status||!apiInput)return;
@@ -12,7 +13,7 @@
   const save=()=>localStorage.setItem(storageKey,JSON.stringify(account));
   const setStatus=message=>{status.textContent=message};
   const request=async(path,options={})=>{
-    const base=normalize(apiInput.value||account.apiUrl);
+    const base=normalize(apiInput.value||account.apiUrl||defaultApiUrl);
     if(!/^https?:\/\//i.test(base))throw new Error('Informe o endereço HTTPS do serviço Lume.');
     const response=await fetch(base+path,{...options,headers:{'content-type':'application/json',...(account.token?{authorization:'Bearer '+account.token}:{}),...(options.headers||{})}});
     const data=await response.json().catch(()=>({}));
@@ -20,9 +21,9 @@
     return data;
   };
   async function refresh(){
-    apiInput.value=account.apiUrl||'';
+    apiInput.value=account.apiUrl||defaultApiUrl;
     emailInput.value=account.email||'';
-    if(!account.apiUrl||!account.token){setStatus(account.apiUrl?'Entre para conectar a conta.':'Conta não conectada.');return}
+    if(!account.token){setStatus('Entre ou crie uma conta para conectar preferências.');return}
     try{const result=await request('/me');account.email=result.user.email;save();emailInput.value=account.email;setStatus('Conectado como '+account.email+'.')}
     catch{delete account.token;save();setStatus('A sessão expirou. Entre novamente.');}
   }
