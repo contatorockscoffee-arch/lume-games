@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07101f">
+  <meta name="description" content="Seu acervo pessoal de jogos, filmes e livros do Internet Archive.">
+  <title>Lume</title>
+  <link rel="icon" href="lume.png">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="density.css">
+</head>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+
+  <header class="topbar">
+    <a class="brand focusable" href="#inicio" aria-label="Lume — início">
+      <img class="lume-mark" src="lume.png" alt="" width="38" height="38">
+      <span><b>LUME</b></span>
+    </a>
+    <nav class="nav" aria-label="Navegação principal">
+      <button class="nav-link active focusable" data-filter="todos">Início</button>
+      <button class="nav-link focusable" data-filter="jogos">Jogos</button>
+      <button class="nav-link focusable" data-filter="filmes">Filmes</button>
+      <button class="nav-link focusable" data-filter="livros">Livros</button>
+    </nav>
+    <div class="top-actions">
+      <button id="openDownloads" class="ghost-button focusable" aria-pressed="false">Downloads <span id="downloadIndicator" hidden aria-label="Transferência em andamento">●</span></button>
+      <button id="openSettings" class="ghost-button focusable">Configurações</button>
+      <button id="openFtp" class="ftp-button focusable"><span class="connection-dot"></span> FTP do PS4</button>
+      <button id="searchToggle" class="icon-button focusable" aria-label="Pesquisar" title="Pesquisar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
+      </button>
+      <button id="openImport" class="add-button focusable"><span>+</span><em>Adicionar</em></button>
+    </div>
+  </header>
+
+  <main id="inicio">
+    <section id="hero" class="hero" aria-live="polite">
+      <div class="hero-copy">
+        <span class="eyebrow">SUA COLEÇÃO, DO SEU JEITO</span>
+        <h1>Seu acervo.<br><span>Sempre por perto.</span></h1>
+        <p>Adicione seus itens do Internet Archive e navegue por capas, descrições e arquivos em uma experiência feita para a sala.</p>
+        <div class="hero-actions">
+          <button id="heroAdd" class="primary-button focusable"><span>+</span> Adicionar primeiro item</button>
+          <button id="learnMore" class="ghost-button focusable">Como funciona</button>
+        </div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+        <div class="console-shape"><span></span><span></span><span></span><span></span></div>
+        <div class="disc"></div>
+      </div>
+    </section>
+
+    <section id="library" class="library-section">
+      <div class="section-heading">
+        <div><span class="kicker">BIBLIOTECA</span><h2>Minha coleção</h2></div>
+        <div class="library-tools">
+          <label id="searchBox" class="search-box open">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
+            <input id="searchInput" class="focusable" type="search" aria-label="Buscar por nome" placeholder="Buscar por nome" autocomplete="off">
+          </label>
+          <span id="itemCount" class="item-count">0 itens</span>
+          <label class="density-control" title="Ajustar tamanho dos cards">
+            <span>Cards</span>
+            <input id="cardSize" type="range" min="160" max="300" step="10" value="205" aria-label="Tamanho dos cards">
+            <output id="cardSizeValue" for="cardSize">205px</output>
+          </label>
+        </div>
+      </div>
+      <div class="catalog-options">
+        <label>Console <select id="catalogPlatform"><option value="all">Todos</option></select></label>
+        <label id="contentFilterLabel">Conteúdo <select id="catalogContent"><option value="all">Todos</option></select></label>
+        <label id="emulatorFilterLabel" hidden>Sistema emulado <select id="catalogTarget"><option value="all">Todos</option></select></label>
+        <label>Fonte <select id="catalogSourceFilter"><option value="all">Todas</option><option value="archive">Internet Archive</option><option value="github">GitHub</option></select></label>
+        <label>Categoria <select id="catalogCategory"><option value="todos">Todas</option><option value="jogos">Jogos</option><option value="filmes">Filmes</option><option value="livros">Livros</option></select></label>
+        <label>Ordenar <select id="catalogOrder"><option value="recent">Mais recentes</option><option value="az">Título A–Z</option><option value="za">Título Z–A</option><option value="size">Maior tamanho</option></select></label>
+        <label><input id="multipartOnly" type="checkbox"> Somente multipartes</label>
+      </div>
+      <p id="noResults" class="empty-state" hidden>Nenhum item corresponde à busca e aos filtros.</p>
+      <div id="emptyState" class="empty-state">
+        <div class="empty-icon"><span></span><span></span><span></span></div>
+        <h3>Sua estante está pronta</h3>
+        <p>Cole uma URL ou identificador do Internet Archive para começar.</p>
+        <button class="primary-button focusable" data-open-import>Adicionar conteúdo</button>
+      </div>
+      <div id="grid" class="media-grid" aria-live="polite"></div>
+      <nav id="catalogPages" class="catalog-pages" aria-label="Páginas do catálogo" hidden>
+        <button id="catalogPrevious" type="button" class="ghost-button focusable">Anterior</button>
+        <span id="catalogPageLabel" class="item-count" aria-live="polite"></span>
+        <button id="catalogNext" type="button" class="ghost-button focusable">Próxima</button>
+      </nav>
+    </section>
+  </main>
+
+  <section id="downloadsPage" class="library-section downloads-page" aria-labelledby="downloadsHeading" hidden>
+    <div class="section-heading">
+      <div><h2 id="downloadsHeading">Downloads</h2><p class="item-count">Acompanhe a transferência enquanto navega pelo catálogo.</p></div>
+      <button id="backToCatalog" type="button" class="ghost-button focusable">Voltar ao catálogo</button>
+    </div>
+    <nav class="downloads-tabs" aria-label="Área de downloads">
+      <button type="button" class="ghost-button focusable" data-download-tab="progress" aria-pressed="true">Em andamento</button>
+      <button type="button" class="ghost-button focusable" data-download-tab="library" aria-pressed="false">Minha Biblioteca</button>
+      <button type="button" class="ghost-button focusable" data-download-tab="history" aria-pressed="false">Histórico</button>
+    </nav>
+    <div id="downloadProgressPanel">
+    <p id="downloadsEmpty" class="empty-state">Seus downloads e envios ao PS4 aparecem aqui.</p>
+    <section id="desktopQueueCards" class="desktop-queue" aria-live="polite"></section>
+    <article id="transferCard" class="transfer-card" hidden>
+      <h3 id="transferTitle"></h3>
+      <p id="transferSource" class="transfer-source" hidden></p>
+      <p id="transferPhase" role="status"></p>
+      <div id="transferTrack" class="progress-track" role="progressbar" aria-label="Progresso da etapa"><div id="transferBar"></div></div>
+      <div class="transfer-metrics"><strong id="transferPercent"></strong><span id="transferBytes"></span><span id="transferSpeed"></span><span id="transferEta"></span></div>
+      <div class="dialog-button-row settings-field"><button type="button" id="pauseDownload" class="ghost-button">Pausar</button><button type="button" id="cancelDownload" class="danger-button">Cancelar download</button></div>
+      <div id="downloadRecovery" class="dialog-button-row settings-field" hidden></div>
+      <div class="dialog-button-row settings-field" id="extractedActions" hidden>
+        <button type="button" id="sendExtracted" class="ps4-button focusable">Enviar extraídos ao PS4</button>
+      </div>
+    </article>
+    </div>
+    <section id="downloadLibraryPanel" hidden>
+      <p id="downloadLibraryStatus" role="status" class="item-count"></p>
+      <ul id="downloadLibrary" class="download-history"></ul>
+    </section>
+    <section id="downloadHistoryPanel" hidden>
+    <p id="downloadHistoryEmpty" class="empty-state">Nenhuma transferência concluída ou interrompida.</p>
+    <div id="downloadHistorySection" hidden>
+      <h3>Histórico</h3>
+      <ul id="downloadHistory" class="download-history"></ul>
+    </div>
+    </section>
+  </section>
+
+  <footer>
+    <span><b>LUME</b> · catálogo pessoal</span>
+    <span>Use apenas conteúdo próprio ou autorizado.</span>
+  </footer>
+
+  <dialog id="importDialog" class="dialog import-dialog">
+    <form method="dialog" class="dialog-shell" id="importForm">
+      <button class="dialog-close focusable" value="cancel" aria-label="Fechar">×</button>
+      <span class="dialog-kicker">ADICIONAR AO ACERVO</span>
+      <h2>De onde vamos importar?</h2>
+      <p class="dialog-intro">Cole um item do Internet Archive ou o link de um catálogo JSON público no GitHub.</p>
+      <label class="url-field">
+        <span>URL ou identificador</span>
+        <div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.2 1.2"></path><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.2-1.2"></path></svg><input id="archiveInput" class="focusable" autocomplete="off" placeholder="URL do Archive ou do JSON no GitHub" required></div>
+      </label>
+      <fieldset class="type-picker">
+        <legend>Categoria</legend>
+        <label><input type="radio" name="mediaType" value="auto" checked><span>Automática</span></label>
+        <label><input type="radio" name="mediaType" value="jogos"><span>Jogo</span></label>
+        <label><input type="radio" name="mediaType" value="filmes"><span>Filme</span></label>
+        <label><input type="radio" name="mediaType" value="livros"><span>Livro</span></label>
+      </fieldset>
+      <div id="importStatus" class="status-message" role="status"></div>
+      <button id="importButton" class="primary-button wide focusable" value="default"><span class="button-label">Ler metadados</span><span class="spinner"></span></button>
+      <small>O catálogo fica salvo neste computador e carrega automaticamente ao abrir.</small>
+    </form>
+  </dialog>
+
+  <dialog id="detailsDialog" class="dialog details-dialog">
+    <div id="detailsContent" class="details-shell"></div>
+  </dialog>
+
+  <dialog id="helpDialog" class="dialog help-dialog">
+    <div class="dialog-shell">
+      <button class="dialog-close focusable" data-close-help aria-label="Fechar">×</button>
+      <span class="dialog-kicker">COMO FUNCIONA</span>
+      <h2>Do Archive para sua estante</h2>
+      <ol class="steps">
+        <li><b>1</b><span><strong>Cole o link</strong>Use uma página <code>/details/</code> ou o identificador do seu item.</span></li>
+        <li><b>2</b><span><strong>Confira os dados</strong>O app encontra título, capa, descrição, formatos e arquivos.</span></li>
+        <li><b>3</b><span><strong>Abra ou baixe</strong>Você sempre acessa a página original e os arquivos hospedados no Archive.</span></li>
+      </ol>
+      <button class="primary-button wide focusable" data-help-add>Adicionar meu primeiro item</button>
+    </div>
+  </dialog>
+
+  <dialog id="ftpDialog" class="dialog ftp-dialog">
+    <form method="dialog" class="dialog-shell" id="ftpForm">
+      <button class="dialog-close focusable" value="cancel" aria-label="Fechar">×</button>
+      <span class="dialog-kicker">CONEXÃO DIRETA</span>
+      <h2>FTP do PlayStation 4</h2>
+      <p class="dialog-intro">Ative o servidor FTP no PS4 e informe o endereço exibido na tela.</p>
+      <div class="ftp-grid">
+        <label class="compact-field wide-field"><span>IP do PS4</span><input id="ftpHost" class="focusable" placeholder="192.168.0.120" required></label>
+        <label class="compact-field"><span>Porta</span><input id="ftpPort" class="focusable" inputmode="numeric" value="2121"></label>
+        <label class="compact-field"><span>Usuário</span><input id="ftpUser" class="focusable" value="anonymous"></label>
+        <label class="compact-field"><span>Senha</span><input id="ftpPassword" class="focusable" type="password"></label>
+        <label class="compact-field wide-field"><span>Pasta de destino</span><input id="ftpPath" class="focusable" value="/data/pkg"></label>
+      </div>
+      <div id="ftpStatus" class="status-message" role="status"></div>
+      <div class="dialog-button-row">
+        <button id="testFtp" class="ghost-button focusable" value="default">Testar conexão</button>
+        <button id="saveFtp" class="primary-button focusable" value="default">Salvar configuração</button>
+      </div>
+      <button type="button" id="browseFtp" class="ps4-button focusable">Salvar e abrir Explorador</button>
+      <small>A senha fica armazenada somente neste computador.</small>
+    </form>
+  </dialog>
+  <dialog id="ftpExplorer" class="dialog explorer-dialog" aria-labelledby="ftpExplorerTitle">
+    <header class="explorer-heading">
+      <div><h2 id="ftpExplorerTitle">Explorador do PS4</h2><p id="explorerDefault" class="item-count"></p></div>
+      <div class="explorer-actions">
+        <button type="button" id="explorerSettings" class="ghost-button focusable">Configuração FTP</button>
+        <button type="button" id="explorerClose" class="ghost-button focusable">Fechar</button>
+      </div>
+    </header>
+    <div class="explorer-actions explorer-toolbar">
+      <button type="button" id="explorerUp" class="ghost-button focusable">Subir</button>
+      <button type="button" id="explorerRefresh" class="ghost-button focusable">Atualizar</button>
+      <button type="button" id="explorerDefaultJump" class="ghost-button focusable">Pasta padrão</button>
+      <form id="explorerAddressForm"><input id="explorerAddress" aria-label="Caminho do PS4" value="/"><button class="ghost-button focusable">Ir</button></form>
+    </div>
+    <div class="explorer-layout">
+      <aside aria-label="Árvore de pastas"><div id="explorerTree"></div></aside>
+      <section aria-label="Conteúdo da pasta">
+        <div class="explorer-actions">
+          <button type="button" id="explorerUpload" class="ps4-button focusable">Enviar arquivos do PC</button>
+          <button type="button" id="explorerDownload" class="ghost-button focusable">Baixar no PC</button>
+          <button type="button" id="explorerMkdir" class="ghost-button focusable">Nova pasta</button>
+          <button type="button" id="explorerRename" class="ghost-button focusable">Renomear</button>
+          <button type="button" id="explorerMove" class="ghost-button focusable">Mover</button>
+          <button type="button" id="explorerRemove" class="ghost-button focusable">Excluir</button>
+        </div>
+        <form id="explorerEditForm" class="explorer-actions" hidden>
+          <label id="explorerEditLabel" for="explorerEditValue"></label>
+          <input id="explorerEditValue" required>
+          <button class="primary-button focusable">Confirmar</button>
+          <button type="button" id="explorerEditCancel" class="ghost-button focusable">Cancelar</button>
+        </form>
+        <p id="explorerStatus" class="item-count" role="status"></p>
+        <div id="explorerEntries" class="explorer-entries"></div>
+      </section>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+  <dialog id="settingsDialog" class="dialog">
+    <form method="dialog" class="dialog-shell">
+      <h2>Configurações</h2>
+      <section class="source-settings" aria-labelledby="sourceHeading">
+        <h3 id="sourceHeading">Fontes do catálogo <span id="sourceCount" class="item-count"></span></h3>
+        <div id="sourceList" class="source-list"></div>
+        <p id="sourceStatus" role="status"></p>
+        <button type="button" id="addSource" class="ghost-button focusable">Adicionar link</button>
+        <button type="button" id="syncDefaultSources" class="ghost-button focusable">Sincronizar fontes padrão</button>
+        <button type="button" id="exportPs4Catalog" class="ps4-button focusable">Exportar lista PKG do PS4</button>
+        <p class="item-count">A lista do PS4 inclui somente os arquivos .pkg das fontes do GitHub.</p>
+      </section>
+      <label class="settings-check"><input id="autoExtract" type="checkbox" checked> Extrair arquivos automaticamente após baixar no PC</label>
+      <label class="compact-field settings-field"><span>Chave do TheGamesDB (opcional)</span><input id="gamesKey" type="password" autocomplete="off"></label>
+      <section class="source-settings" aria-labelledby="archiveAuthHeading">
+        <h3 id="archiveAuthHeading">Internet Archive</h3>
+        <p id="archiveAuthStatus" class="item-count">Sessão não verificada.</p>
+        <div class="dialog-button-row"><button type="button" id="archiveLogin" class="ghost-button">Entrar no Archive</button><button type="button" id="archiveLogout" class="ghost-button">Sair</button></div>
+      </section>
+      <section class="source-settings" aria-labelledby="lumeAccountHeading">
+        <h3 id="lumeAccountHeading">Conta Lume</h3>
+        <p class="item-count">Opcional: sincroniza apenas preferências. Sua sessão do Archive e seus arquivos nunca saem deste computador.</p>
+        <label class="compact-field settings-field"><span>Endereço do serviço Lume</span><input id="lumeApiUrl" type="url" placeholder="https://seu-projeto.up.railway.app"></label>
+        <label class="compact-field settings-field"><span>E-mail</span><input id="lumeAccountEmail" type="email" autocomplete="email"></label>
+        <label class="compact-field settings-field"><span>Senha</span><input id="lumeAccountPassword" type="password" autocomplete="current-password"></label>
+        <div class="dialog-button-row"><button type="button" id="lumeAccountLogin" class="ghost-button">Entrar</button><button type="button" id="lumeAccountRegister" class="ghost-button">Criar conta</button><button type="button" id="lumeAccountLogout" class="ghost-button">Sair da conta</button></div>
+        <p id="lumeAccountStatus" class="item-count" role="status">Conta não conectada.</p>
+      </section>
+      <p class="dialog-intro">Sem chave, o app busca capas na Wikipédia automaticamente. Sincronize de novo para consultar os jogos que ainda estão sem capa.</p>
+      <div class="dialog-button-row">
+        <button type="button" id="bulkMetadata" class="ghost-button">Sincronizar capas</button>
+        <button type="button" id="exportCatalog" class="ghost-button">Exportar catálogo</button>
+      </div>
+      <p id="settingsStatus" role="status"></p>
+      <button class="primary-button wide">Fechar</button>
+    </form>
+  </dialog>
+  <dialog id="metadataDialog" class="dialog">
+    <div class="dialog-shell">
+      <h2>Capas e metadados</h2>
+      <form id="metadataSearch" class="compact-field">
+        <label for="gameQuery">Nome do jogo</label>
+        <input id="gameQuery" required>
+        <button class="primary-button">Buscar</button>
+      </form>
+      <p id="metadataStatus" role="status"></p>
+      <div id="metadataResults" class="metadata-results"></div>
+      <button type="button" id="closeMetadata" class="ghost-button">Fechar</button>
+    </div>
+  </dialog>
+  <script src="archive-volumes.js"></script>
+  <script src="app.js"></script>
+  <script src="downloads.js"></script>
+  <script src="catalog-tools.js"></script>
+  <script src="catalog-json.js"></script>
+  <script src="catalog-platforms.js"></script>
+  <script src="default-sources.js"></script>
+  <script src="catalog-sources.js"></script>
+  <script src="ftp-ui.js"></script>
+  <script src="account.js"></script>
+</body>
+</html>
+
