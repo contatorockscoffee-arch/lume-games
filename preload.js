@@ -1,0 +1,31 @@
+const {contextBridge,ipcRenderer}=require('electron');
+contextBridge.exposeInMainWorld('desktop',{
+  platform:'windows',
+  testFtp:config=>ipcRenderer.invoke('ftp-test',config),
+  ftpList:(config,folder)=>ipcRenderer.invoke('ftp-explore-list',{config,folder}),
+  ftpEdit:(config,operation)=>ipcRenderer.invoke('ftp-explore-edit',{config,...operation}),
+  ftpUploadLocal:(config,folder,jobId)=>ipcRenderer.invoke('ftp-explore-upload',{config,folder,jobId}),
+  ftpDownloadLocal:(config,folder,name,jobId)=>ipcRenderer.invoke('ftp-explore-download',{config,folder,name,jobId}),
+  download:(url,name,options)=>ipcRenderer.invoke('download-file',{url,name,...options}),
+  downloadExtract:(id,names,urls,options)=>ipcRenderer.invoke('download-extract',{id,names,urls,...options}),
+  pickDownloadFolder:()=>ipcRenderer.invoke('pick-download-folder'),
+  queueActivity:active=>ipcRenderer.send('queue-activity',active),
+  checkLocalCopies:copies=>ipcRenderer.invoke('check-local-copies',copies),
+  readGithubCatalog:url=>ipcRenderer.invoke('read-github-catalog',url),
+  exportPs4Catalog:data=>ipcRenderer.invoke('export-ps4-catalog',data),
+  sendExtracted:(config,options)=>ipcRenderer.invoke('send-extracted-to-ps4',config,options),
+  lookupGame:(key,title,ps4)=>ipcRenderer.invoke('game-metadata',{key,title,ps4}),
+  sendToPs4:(url,name,config,jobId)=>ipcRenderer.invoke('send-to-ps4',{url,name,config,jobId}),
+  exportCatalog:data=>ipcRenderer.invoke('export-catalog',data),
+  openExternal:url=>ipcRenderer.invoke('open-external',url),
+  archiveLogin:()=>ipcRenderer.invoke('archive-login'),
+  archiveLogout:()=>ipcRenderer.invoke('archive-logout'),
+  archiveAuthStatus:()=>ipcRenderer.invoke('archive-auth-status'),
+  cancelDownload:jobId=>ipcRenderer.invoke('cancel-download',jobId),
+  pauseDownload:jobId=>ipcRenderer.invoke('pause-download',jobId),
+  updateDownload:()=>ipcRenderer.invoke('app-update-download'),
+  updateInstall:()=>ipcRenderer.invoke('app-update-install'),
+  onAppUpdate:callback=>ipcRenderer.on('app-update',(_event,value)=>callback(value)),
+  onProgress:callback=>ipcRenderer.on('transfer-progress',(_event,value)=>callback(value))
+});
+
