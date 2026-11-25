@@ -1,0 +1,80 @@
+{
+  "name": "lume-desktop",
+  "version": "2.8.0",
+  "description": "Catálogo pessoal retrô com Internet Archive e envio FTP para PS4",
+  "main": "main.js",
+  "author": "Lume",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis portable"
+  },
+  "dependencies": {
+    "basic-ftp": "^5.0.5",
+    "electron-updater": "^6.6.2"
+  },
+  "devDependencies": {
+    "electron": "^39.2.4",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.lume.desktop",
+    "productName": "Lume",
+    "artifactName": "Lume-${version}-${arch}.${ext}",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "contatorockscoffee-arch",
+        "repo": "lume-games"
+      }
+    ],
+    "directories": {
+      "output": "build-output"
+    },
+    "compression": "store",
+    "extraResources": [{"from":"vendor/7zip-full","to":"7zip"}],
+    "files": [
+      "main.js",
+      "ftp-explorer.js",
+      "extract.js",
+      "wiki-metadata.js",
+      "app/catalog-json.js",
+      "preload.js",
+      "app/**/*",
+      "node_modules/basic-ftp/**/*"
+      ,"node_modules/electron-updater/**/*"
+    ],
+    "win": {
+      "icon": "app/lume.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {"artifactName": "Lume-${version}-Portable-${arch}.${ext}"},
+    "nsis": {
+      "artifactName": "Lume-${version}-Instalador-${arch}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Lume"
+    }
+  },
+  "allowScripts": {
+    "electron@39.8.10": true,
+    "electron-winstaller@5.4.0": true
+  }
+}
+
