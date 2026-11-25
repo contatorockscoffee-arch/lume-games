@@ -21,4 +21,5 @@ jobs:
           files: |
             build-output/Lume-*-Instalador-x64.exe
             build-output/Lume-*-Portable-x64.exe
-
+            build-output/latest.yml
+            build-output/*.blockmap
