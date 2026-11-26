@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('desktop',{
   archiveLogin:()=>ipcRenderer.invoke('archive-login'),
   archiveLogout:()=>ipcRenderer.invoke('archive-logout'),
   archiveAuthStatus:()=>ipcRenderer.invoke('archive-auth-status'),
+  archiveSyncSession:options=>ipcRenderer.invoke('archive-sync-session',options),
+  archiveSessionStatus:options=>ipcRenderer.invoke('archive-session-status',options),
   cancelDownload:jobId=>ipcRenderer.invoke('cancel-download',jobId),
   pauseDownload:jobId=>ipcRenderer.invoke('pause-download',jobId),
   updateDownload:()=>ipcRenderer.invoke('app-update-download'),
