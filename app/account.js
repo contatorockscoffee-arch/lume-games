@@ -12,6 +12,11 @@
   const normalize=url=>String(url||'').trim().replace(/\/$/,'');
   const save=()=>localStorage.setItem(storageKey,JSON.stringify(account));
   const setStatus=message=>{status.textContent=message};
+  window.__lumeAccountSyncArchive=async()=>{
+    if(!account.token||!window.desktop?.archiveSyncSession)return null;
+    try{return await window.desktop.archiveSyncSession({apiUrl:account.apiUrl||defaultApiUrl,token:account.token})}
+    catch(error){return{error:error.message}}
+  };
   const request=async(path,options={})=>{
     const base=normalize(apiInput.value||account.apiUrl||defaultApiUrl);
     if(!/^https?:\/\//i.test(base))throw new Error('Informe o endereço HTTPS do serviço Lume.');
@@ -24,18 +29,19 @@
     apiInput.value=account.apiUrl||defaultApiUrl;
     emailInput.value=account.email||'';
     if(!account.token){setStatus('Entre ou crie uma conta para conectar preferências.');return}
-    try{const result=await request('/me');account.email=result.user.email;save();emailInput.value=account.email;setStatus('Conectado como '+account.email+'.')}
+    try{const result=await request('/me');account.email=result.user.email;save();emailInput.value=account.email;setStatus('Conectado como '+account.email+'.');window.__lumeAccountSyncArchive?.()}
     catch{delete account.token;save();setStatus('A sessão expirou. Entre novamente.');}
   }
   async function authenticate(route){
     const email=emailInput.value.trim(),password=passwordInput.value;
     account.apiUrl=normalize(apiInput.value);save();
-    try{setStatus(route==='login'?'Entrando…':'Criando conta…');const result=await request('/auth/'+route,{method:'POST',body:JSON.stringify({email,password}),headers:{}});account.token=result.token;account.email=result.user.email;save();passwordInput.value='';setStatus('Conectado como '+account.email+'.')}
+    try{setStatus(route==='login'?'Entrando…':'Criando conta…');const result=await request('/auth/'+route,{method:'POST',body:JSON.stringify({email,password}),headers:{}});account.token=result.token;account.email=result.user.email;save();passwordInput.value='';setStatus('Conectado como '+account.email+'.');window.__lumeAccountSyncArchive?.();document.dispatchEvent(new CustomEvent('lume-account-changed'))}
     catch(error){setStatus(error.message)}
   }
   $('#lumeAccountLogin').addEventListener('click',()=>authenticate('login'));
   $('#lumeAccountRegister').addEventListener('click',()=>authenticate('register'));
   $('#lumeAccountLogout').addEventListener('click',()=>{delete account.token;save();passwordInput.value='';setStatus('Sessão encerrada neste computador.');});
+  document.addEventListener('lume-archive-login',()=>window.__lumeAccountSyncArchive?.());
   document.querySelector('#settingsDialog')?.addEventListener('open',refresh);
   refresh();
 })();
