@@ -7,8 +7,9 @@ Endereço: `https://lume-api-production-1838468f.up.railway.app`
 Dados guardados no volume (`/data`):
 - `LUME_DB`: contas e aparelhos, em JSON.
 - `saves/<usuário>/`: os saves.
+- `archive/<usuário>.bin`: sessão do Internet Archive criptografada, quando configurada.
 
-Não armazena cookies do Internet Archive, senhas do Archive, arquivos PKG nem histórico detalhado de downloads.
+Não armazena senhas do Archive. A sessão é opcional e guarda somente os cookies criptografados com `LUME_ARCHIVE_SESSION_KEY`.
 
 Variáveis de ambiente:
 
@@ -20,6 +21,8 @@ Variáveis de ambiente:
 | `LUME_SAVE_MAX_FILE_MB` | Tamanho máximo de um arquivo. Padrão: 48. |
 | `LUME_PUBLIC_URL` | Opcional. Padrão: `https://$RAILWAY_PUBLIC_DOMAIN`. |
 | `LUME_DONATION_URL` | Link de doação. |
+| `LUME_ARCHIVE_SESSION_KEY` | Chave secreta obrigatória para habilitar o relay autenticado do Archive. Gere uma chave aleatória forte e configure-a como segredo no Railway. |
+| `LUME_ARCHIVE_DIR` | Pasta do volume para as sessões criptografadas. Padrão: ao lado do `LUME_DB`. |
 
 O armazenamento em JSON serve para poucos usuários. Para crescer, troque por PostgreSQL ou outro banco gerenciado.
 
@@ -32,6 +35,19 @@ O armazenamento em JSON serve para poucos usuários. Para crescer, troque por Po
 | `GET /me` | Devolve `{user, device}`. |
 
 Todas as rotas protegidas usam `Authorization: Bearer <token>`.
+
+## Sessão do Internet Archive
+
+O Desktop abre o login oficial do Archive em uma sessão persistente do Electron. Depois que o usuário entra, ele pode sincronizar a sessão com a conta Lume. O servidor recebe somente os cookies do domínio `archive.org`, cifra-os em repouso e nunca recebe a senha.
+
+| Rota | O que faz |
+|---|---|
+| `GET /archive/session` | Informa se o relay está habilitado e se há uma sessão salva; não devolve cookies. |
+| `PUT /archive/session` | Recebe os cookies exportados pelo Desktop e os cifra para a conta autenticada. |
+| `DELETE /archive/session` | Apaga a sessão salva. |
+| `GET /archive/proxy?u=<URL Archive>` | Faz o download autenticado para o PS4/cliente vinculado, seguindo até 6 redirecionamentos somente dentro de `archive.org`. Mantém `Range` para retomada. |
+
+Sem `LUME_ARCHIVE_SESSION_KEY`, as rotas retornam que o recurso está desabilitado e nenhum cookie é persistido.
 
 ## Conectar um aparelho por código (PS4)
 
@@ -110,3 +126,4 @@ Os dados ficam em `cloud/data.json` e `cloud/saves`. O teste ponta a ponta usado
 - cota;
 - caminhos inválidos;
 - revogação.
+
