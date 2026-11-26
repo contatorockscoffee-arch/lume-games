@@ -11,6 +11,10 @@ const secret=process.env.LUME_SESSION_SECRET||'change-this-secret-before-deployi
 const donationUrl=process.env.LUME_DONATION_URL||'';
 // Saves na nuvem: arquivos no volume (Railway: /data), um índice por usuário.
 const savesRoot=process.env.LUME_SAVES_DIR||path.join(path.dirname(dbFile),'saves');
+// Sessões do Internet Archive: armazenamos apenas cookies criptografados, nunca a senha.
+// O recurso permanece desabilitado até que LUME_ARCHIVE_SESSION_KEY seja configurada no Railway.
+const archiveRoot=process.env.LUME_ARCHIVE_DIR||path.join(path.dirname(dbFile),'archive');
+const archiveKey=process.env.LUME_ARCHIVE_SESSION_KEY?crypto.createHash('sha256').update(process.env.LUME_ARCHIVE_SESSION_KEY).digest():null;
 const quotaBytes=(Number(process.env.LUME_SAVE_QUOTA_MB)||256)*1024*1024;
 const maxFileBytes=(Number(process.env.LUME_SAVE_MAX_FILE_MB)||48)*1024*1024;
 const keepVersions=3; // versões anteriores guardadas de cada save (desfazer conflito)
@@ -28,6 +32,60 @@ function auth(req,db){const raw=req.headers.authorization||'';if(!raw.startsWith
 function hash(password,salt=crypto.randomBytes(16).toString('hex')){return new Promise((resolve,reject)=>crypto.scrypt(password,salt,64,(e,key)=>e?reject(e):resolve({salt,hash:key.toString('hex')})))}
 function body(req){return new Promise((resolve,reject)=>{let data='';req.on('data',chunk=>{data+=chunk;if(data.length>1e6)req.destroy()});req.on('end',()=>{try{resolve(data?JSON.parse(data):{})}catch{reject(new Error('JSON inválido'))}});req.on('error',reject)})}
 function rawBody(req,limit){return new Promise((resolve,reject)=>{const parts=[];let size=0;req.on('data',chunk=>{size+=chunk.length;if(size>limit){reject(Object.assign(new Error('Arquivo grande demais.'),{status:413}));req.destroy();return}parts.push(chunk)});req.on('end',()=>resolve(Buffer.concat(parts)));req.on('error',reject)})}
+
+function archiveFile(id){return path.join(archiveRoot,id.replace(/[^a-zA-Z0-9-]/g,'' )+'.bin')}
+function archiveEncrypt(cookies){
+  if(!archiveKey)throw Object.assign(new Error('Sessão do Archive ainda não está configurada no servidor.'),{status:503});
+  const iv=crypto.randomBytes(12),cipher=crypto.createCipheriv('aes-256-gcm',archiveKey,iv);
+  const body=Buffer.from(JSON.stringify({v:1,cookies,savedAt:new Date().toISOString()}));
+  const data=Buffer.concat([cipher.update(body),cipher.final()]);
+  return JSON.stringify({v:1,iv:iv.toString('base64url'),tag:cipher.getAuthTag().toString('base64url'),data:data.toString('base64url')});
+}
+function archiveDecrypt(text){
+  if(!archiveKey)throw Object.assign(new Error('Sessão do Archive ainda não está configurada no servidor.'),{status:503});
+  const box=JSON.parse(text),dec=crypto.createDecipheriv('aes-256-gcm',archiveKey,Buffer.from(box.iv,'base64url'));dec.setAuthTag(Buffer.from(box.tag,'base64url'));
+  return JSON.parse(Buffer.concat([dec.update(Buffer.from(box.data,'base64url')),dec.final()]).toString('utf8'));
+}
+async function archiveRead(id){try{return archiveDecrypt(await fsp.readFile(archiveFile(id),'utf8'))}catch(error){if(error.code==='ENOENT')return null;throw error}}
+async function archiveWrite(id,cookies){await fsp.mkdir(archiveRoot,{recursive:true});const file=archiveFile(id),tmp=file+'.tmp';await fsp.writeFile(tmp,archiveEncrypt(cookies),{mode:0o600});await fsp.rename(tmp,file)}
+function normalizeArchiveCookies(input){
+  const source=Array.isArray(input)?input:input?.cookies;
+  if(!Array.isArray(source)||source.length>100)throw Object.assign(new Error('Lista de cookies inválida.'),{status:400});
+  const now=Math.floor(Date.now()/1000),out=[];
+  for(const c of source){
+    const name=String(c?.name||''); const value=String(c?.value||''); const domain=String(c?.domain||'').toLowerCase();
+    if(!/^[A-Za-z0-9._-]{1,120}$/.test(name)||value.length>4096||!/^(?:\.?archive\.org|\.[A-Za-z0-9.-]+\.archive\.org)$/.test(domain))continue;
+    if(c?.expirationDate&&Number(c.expirationDate)<=now)continue;
+    out.push({name,value,domain,path:String(c?.path||'/').slice(0,200),secure:Boolean(c?.secure),expirationDate:c?.expirationDate?Number(c.expirationDate):undefined});
+  }
+  if(!out.length)throw Object.assign(new Error('Nenhum cookie válido do Internet Archive foi recebido.'),{status:400});
+  return out;
+}
+function archiveCookieHeader(data,target){
+  const host=target.hostname.toLowerCase(),now=Math.floor(Date.now()/1000);
+  return (data?.cookies||[]).filter(c=>!c.expirationDate||c.expirationDate>now).filter(c=>{const d=String(c.domain||'').toLowerCase().replace(/^\./,'');return host===d||host.endsWith('.'+d)}).map(c=>c.name+'='+c.value).join('; ');
+}
+function archiveTarget(raw){
+  let u;try{u=new URL(String(raw||''))}catch{return null}
+  if(u.protocol!=='https:')return null;
+  const host=u.hostname.toLowerCase(); if(!(host==='archive.org'||host.endsWith('.archive.org')))return null;
+  u.username='';u.password='';return u;
+}
+async function archiveProxy(req,res,db,url){
+  const value=auth(req,db);if(!value)return json(res,401,{error:'Sessão Lume inválida.'});
+  const target=archiveTarget(url.searchParams.get('u'));if(!target)return json(res,400,{error:'Destino Archive inválido.'});
+  const saved=await archiveRead(value.user.id);if(!saved)return json(res,409,{error:'Faça login no Internet Archive no Desktop antes de baixar no PS4.'});
+  let current=target;
+  for(let hop=0;hop<6;hop++){
+    const headers={cookie:archiveCookieHeader(saved,current),'user-agent':'Lume Games Archive relay','accept':'*/*'};
+    const range=req.headers.range;if(range)headers.range=range;
+    const upstream=await fetch(current,{redirect:'manual',headers});
+    if(upstream.status>=300&&upstream.status<400&&upstream.headers.get('location')){const next=new URL(upstream.headers.get('location'),current);if(!archiveTarget(next.href))return json(res,502,{error:'O redirecionamento saiu do Internet Archive.'});current=next;continue}
+    const allowed=['content-type','content-length','content-range','accept-ranges','etag','last-modified'];const out={};for(const h of allowed){const v=upstream.headers.get(h);if(v)out[h]=v}out['cache-control']='no-store';
+    res.writeHead(upstream.status,out);if(!upstream.body)return res.end();for await(const chunk of upstream.body)res.write(chunk);return res.end();
+  }
+  return json(res,502,{error:'Redirecionamentos demais no Internet Archive.'});
+}
 
 // Limite simples por IP (protege login e pareamento de tentativa e erro).
 const hits=new Map();
@@ -80,6 +138,19 @@ const server=http.createServer(async(req,res)=>{try{
   if(req.method==='POST'&&url.pathname==='/auth/login'){if(limited(req,'auth',30))return json(res,429,{error:'Muitas tentativas. Espere alguns minutos.'});const input=await body(req),user=db.users.find(u=>u.email===String(input.email||'').trim().toLowerCase());if(!user)return json(res,401,{error:'Credenciais inválidas.'});const credentials=await hash(String(input.password||''),user.salt);if(!crypto.timingSafeEqual(Buffer.from(credentials.hash,'hex'),Buffer.from(user.hash,'hex')))return json(res,401,{error:'Credenciais inválidas.'});return json(res,200,{token:token(user.id),user:{id:user.id,email:user.email}})}
   if(req.method==='GET'&&url.pathname==='/me'){const value=auth(req,db);if(!value)return json(res,401,{error:'Sessão inválida.'});return json(res,200,{user:{id:value.user.id,email:value.user.email},device:value.dev||null})}
 
+  // ----- Sessão do Internet Archive (somente cookies exportados pelo Desktop; senha nunca passa pela API)
+  if(url.pathname==='/archive/session'){
+    const value=auth(req,db);if(!value)return json(res,401,{error:'Sessão Lume inválida.'});
+    if(req.method==='GET'){
+      const saved=await archiveRead(value.user.id);return json(res,200,{enabled:Boolean(archiveKey),authenticated:Boolean(saved),savedAt:saved?.savedAt||null});
+    }
+    if(req.method==='PUT'||req.method==='POST'){
+      const cookies=normalizeArchiveCookies(await body(req));await archiveWrite(value.user.id,cookies);return json(res,200,{ok:true,authenticated:true,savedAt:new Date().toISOString(),cookies:cookies.length});
+    }
+    if(req.method==='DELETE'){await fsp.rm(archiveFile(value.user.id),{force:true});return json(res,200,{ok:true,authenticated:false});}
+  }
+  if(req.method==='GET'&&url.pathname==='/archive/proxy')return archiveProxy(req,res,db,url);
+
   // ----- aparelhos
   if(req.method==='GET'&&(url.pathname==='/vincular'||url.pathname==='/link'))return text(res,200,linkPage(url.searchParams.get('c')),'text/html; charset=utf-8');
   if(req.method==='POST'&&url.pathname==='/device/start'){if(limited(req,'pair',20))return json(res,429,{error:'Muitas tentativas. Espere alguns minutos.'});sweepPairings();const input=await body(req).catch(()=>({}));const name=String(input.name||'PS4').slice(0,40);let code;do code=newCode();while([...pairings.values()].some(p=>p.code===code));const pollId=crypto.randomBytes(24).toString('base64url');pairings.set(pollId,{code,name,expires:Date.now()+10*60*1000});const link=publicUrl()+'/vincular?c='+code;return json(res,200,{code,pollId,expiresIn:600,url:publicUrl()+'/vincular',link})}
@@ -113,3 +184,4 @@ const server=http.createServer(async(req,res)=>{try{
   return json(res,404,{error:'Rota não encontrada.'});
 }catch(error){return json(res,error.status||400,{error:error.message||'Erro interno.'})}});
 server.listen(Number(process.env.PORT)||8080,()=>console.log('Lume Games API pronta'));
+
