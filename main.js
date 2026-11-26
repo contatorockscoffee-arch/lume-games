@@ -138,6 +138,22 @@ ipcMain.handle('archive-auth-status',async()=>{
   const cookies=await archiveSession().cookies.get({domain:'archive.org'});
   return{authenticated:cookies.some(cookie=>/logged-in|cookie|a/.test(cookie.name))};
 });
+ipcMain.handle('archive-sync-session',async(_event,{apiUrl,token}={})=>{
+  const base=String(apiUrl||'').trim().replace(/\/$/,'');
+  if(!/^https:\/\//i.test(base)||!token)throw new Error('Conecte a conta Lume antes de sincronizar a sessão do Archive.');
+  const cookies=await archiveSession().cookies.get({domain:'archive.org'});
+  if(!cookies.length)throw new Error('Entre no Internet Archive neste computador antes de sincronizar.');
+  const response=await fetch(base+'/archive/session',{method:'PUT',headers:{'content-type':'application/json',authorization:'Bearer '+token},body:JSON.stringify({cookies})});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.error||'Não foi possível sincronizar a sessão do Archive.');
+  return data;
+});
+ipcMain.handle('archive-session-status',async(_event,{apiUrl,token}={})=>{
+  const base=String(apiUrl||'').trim().replace(/\/$/,'');
+  if(!/^https:\/\//i.test(base)||!token)return{authenticated:false,enabled:false};
+  const response=await fetch(base+'/archive/session',{headers:{authorization:'Bearer '+token}});
+  return response.ok?response.json():{authenticated:false,enabled:false};
+});
 
 let lastExtractedFolder;
 const extractedFolders=new Set(),reservedPaths=new Set();
