@@ -65,15 +65,35 @@ $('#searchToggle').addEventListener('click',event=>{
 
 $('#autoExtract').checked=preferences.autoExtract!==false;
 $('#gamesKey').value=preferences.gamesKey||'';
+function renderDownloadFolder(){
+  const node=$('#downloadFolderPath');
+  if(node)node.textContent=preferences.downloadDirectory||'Nenhuma pasta definida — será usada a pasta Downloads do Windows.';
+}
+renderDownloadFolder();
+$('#chooseDownloadFolder').onclick=async()=>{
+  const folder=await window.desktop.pickDownloadFolder();
+  if(!folder)return;
+  preferences.downloadDirectory=folder;
+  savePreferences();
+  renderDownloadFolder();
+  showToast('Pasta de download definida.');
+};
+$('#clearDownloadFolder').onclick=()=>{
+  delete preferences.downloadDirectory;
+  savePreferences();
+  renderDownloadFolder();
+  showToast('A pasta Downloads do Windows será usada.');
+};
 $('#openSettings').onclick=()=>settingsDialog.showModal();
 async function refreshArchiveAuth(){try{const state=await window.desktop.archiveAuthStatus();$('#archiveAuthStatus').textContent=state.authenticated?'Sessão do Archive ativa neste computador.':'Sessão do Archive não detectada.'}catch{$('#archiveAuthStatus').textContent='Não foi possível verificar a sessão.'}}
-$('#archiveLogin').onclick=async()=>{await window.desktop.archiveLogin();refreshArchiveAuth()};
+$('#archiveLogin').onclick=async()=>{await window.desktop.archiveLogin();refreshArchiveAuth();document.dispatchEvent(new CustomEvent('lume-archive-login'))};
 $('#archiveLogout').onclick=async()=>{await window.desktop.archiveLogout();refreshArchiveAuth()};
 settingsDialog.addEventListener('open',refreshArchiveAuth);
 settingsDialog.addEventListener('close',()=>{
   const previousKey=preferences.gamesKey;
   preferences.autoExtract=$('#autoExtract').checked;
   preferences.gamesKey=$('#gamesKey').value.trim();
+  renderDownloadFolder();
   savePreferences();
   if(previousKey!==preferences.gamesKey)refreshMetadata();
 });
@@ -89,7 +109,7 @@ downloadDesktop=async function(item,file){
   if(!startTransfer('Baixando e extraindo '+item.title,undefined,{item,file}))return;
   try{
     const urls=item.sourceId?names.map(name=>fileUrl(item,item.files.find(file=>file.name===name))):undefined;
-    const result=await window.desktop.downloadExtract(item.archiveId||item.id,names,urls);
+    const result=await window.desktop.downloadExtract(item.archiveId||item.id,names,urls,{directory:preferences.downloadDirectory});
     if(result.canceled){cancelTransfer();return}
     showExtractedResult(result.path,item);
     recordLocalCopy(item,file,result);
