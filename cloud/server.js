@@ -61,6 +61,27 @@ function normalizeArchiveCookies(input){
   if(!out.length)throw Object.assign(new Error('Nenhum cookie válido do Internet Archive foi recebido.'),{status:400});
   return out;
 }
+// Login opcional pelo celular: a senha só existe durante esta requisição e nunca é
+// gravada. O Archive devolve cookies de sessão pelo endpoint xauthn; guardamos apenas
+// os cookies de autenticação necessários para o relay, cifrados por archiveWrite().
+async function archiveLogin(email,password){
+  const form=new URLSearchParams({email,password});
+  const response=await fetch('https://archive.org/services/xauthn/?op=login',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded','accept':'application/json','user-agent':'Lume Games Archive login'},body:form,signal:AbortSignal.timeout(15000)});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok||data.success!==true){
+    const reason=String(data?.values?.reason||data?.error||'');
+    if(/bad_password|account_not_found|invalid/i.test(reason))throw Object.assign(new Error('E-mail ou senha do Internet Archive incorretos.'),{status:401});
+    throw Object.assign(new Error('O Internet Archive recusou o login.'),{status:502});
+  }
+  const raw=data?.values?.cookies||{};
+  const cookies=[];
+  if(Array.isArray(raw)){
+    for(const c of raw){const name=String(c?.name||'');if(name==='logged-in-user'||name==='logged-in-sig')cookies.push({...c,domain:c.domain||'.archive.org',path:c.path||'/',secure:true})}
+  }else{
+    for(const name of ['logged-in-user','logged-in-sig'])if(raw[name])cookies.push({name,value:String(raw[name]),domain:'.archive.org',path:'/',secure:true});
+  }
+  return {cookies:normalizeArchiveCookies(cookies),screenname:String(data?.values?.screenname||'')};
+}
 function archiveCookieHeader(data,target){
   const host=target.hostname.toLowerCase(),now=Math.floor(Date.now()/1000);
   return (data?.cookies||[]).filter(c=>!c.expirationDate||c.expirationDate>now).filter(c=>{const d=String(c.domain||'').toLowerCase().replace(/^\./,'');return host===d||host.endsWith('.'+d)}).map(c=>c.name+'='+c.value).join('; ');
@@ -113,19 +134,23 @@ const locks=new Map();
 function withLock(id,fn){const prev=locks.get(id)||Promise.resolve();const run=prev.then(fn,fn);locks.set(id,run.catch(()=>{}));return run}
 
 function linkPage(code){const c=cleanCode(code).slice(0,6);return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conectar aparelho — Lume Games</title>
-<style>body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0d0b24;color:#eef;display:flex;min-height:100vh;align-items:center;justify-content:center}main{width:min(420px,92vw);background:#1a1740;border:1px solid #3b3480;border-radius:18px;padding:28px}h1{font-size:22px;margin:0 0 6px}p{color:#b9b6e0;font-size:15px;line-height:1.45}label{display:block;font-size:13px;color:#b9b6e0;margin:14px 0 6px}input{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:10px;border:1px solid #4a43a0;background:#0f0d2c;color:#fff;font-size:16px}#code{font-size:26px;letter-spacing:6px;text-align:center;text-transform:uppercase}button{width:100%;margin-top:20px;padding:14px;border:0;border-radius:12px;background:#26e4f5;color:#081028;font-weight:700;font-size:16px}a{color:#26e4f5}.msg{margin-top:16px;font-size:15px}.ok{color:#7ff0a8}.err{color:#ff8a9a}</style></head>
-<body><main><h1>Conectar aparelho</h1><p>Digite o código que aparece na tela do PS4 e entre na sua conta Lume. Os saves dos jogos passam a ficar guardados na nuvem.</p>
+<style>body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0d0b24;color:#eef;display:flex;min-height:100vh;align-items:center;justify-content:center}main{width:min(460px,92vw);background:#1a1740;border:1px solid #3b3480;border-radius:18px;padding:28px}h1{font-size:22px;margin:0 0 6px}h2{font-size:18px;margin:24px 0 6px}p{color:#b9b6e0;font-size:15px;line-height:1.45}label{display:block;font-size:13px;color:#b9b6e0;margin:14px 0 6px}input{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:10px;border:1px solid #4a43a0;background:#0f0d2c;color:#fff;font-size:16px}#code{font-size:26px;letter-spacing:6px;text-align:center;text-transform:uppercase}button{width:100%;margin-top:20px;padding:14px;border:0;border-radius:12px;background:#26e4f5;color:#081028;font-weight:700;font-size:16px}button.secondary{background:#302b62;color:#eef}a{color:#26e4f5}.msg{margin-top:16px;font-size:15px}.ok{color:#7ff0a8}.err{color:#ff8a9a}.panel{border-top:1px solid #3b3480;margin-top:24px;padding-top:4px}</style></head>
+<body><main><h1>Conectar aparelho</h1><p>Digite o código que aparece na tela do PS4 e entre na sua conta Lume. Os saves e os downloads autorizados passam a funcionar nesse aparelho.</p>
 <form id="f"><label for="code">Código do aparelho</label><input id="code" maxlength="7" autocomplete="off" value="${c}" required>
-<label for="email">E-mail</label><input id="email" type="email" autocomplete="username" required>
-<label for="pass">Senha</label><input id="pass" type="password" autocomplete="current-password" minlength="8" required>
+<label for="email">E-mail da conta Lume</label><input id="email" type="email" autocomplete="username" required>
+<label for="pass">Senha da conta Lume</label><input id="pass" type="password" autocomplete="current-password" minlength="8" required>
 <button id="go">Entrar e conectar</button></form>
-<p style="margin-top:14px;font-size:14px">Ainda não tem conta? <a href="#" id="toggle">Criar conta agora</a></p><div id="msg" class="msg"></div></main>
-<script>let register=false;const $=id=>document.getElementById(id);
+<p style="margin-top:14px;font-size:14px">Ainda não tem conta? <a href="#" id="toggle">Criar conta agora</a></p><div id="msg" class="msg"></div>
+<section id="archive" class="panel" hidden><h2>Internet Archive</h2><p>Opcional: entre aqui com sua conta do Internet Archive para liberar itens que exigem autenticação. A senha é usada somente nesta requisição e não é salva pelo Lume.</p>
+<form id="af"><label for="aemail">E-mail do Archive</label><input id="aemail" type="email" autocomplete="username" required><label for="apass">Senha do Archive</label><input id="apass" type="password" autocomplete="current-password" required><button id="ago">Salvar sessão do Archive</button></form><div id="amsg" class="msg"></div><button id="skip" class="secondary" type="button">Concluir sem configurar agora</button></section></main>
+<script>let register=false,lumeToken='';const $=id=>document.getElementById(id);
 $('toggle').onclick=e=>{e.preventDefault();register=!register;$('go').textContent=register?'Criar conta e conectar':'Entrar e conectar';$('toggle').textContent=register?'Já tenho conta':'Criar conta agora';$('pass').autocomplete=register?'new-password':'current-password'};
 $('f').onsubmit=async e=>{e.preventDefault();const msg=$('msg');msg.className='msg';msg.textContent='Conectando…';$('go').disabled=true;
-try{const r=await fetch(register?'/auth/register':'/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:$('email').value,password:$('pass').value})});const a=await r.json();if(!r.ok)throw new Error(a.error||'Não deu para entrar.');
-const p=await fetch('/device/approve',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+a.token},body:JSON.stringify({code:$('code').value})});const b=await p.json();if(!p.ok)throw new Error(b.error||'Código inválido.');
-msg.className='msg ok';msg.textContent='Pronto! O aparelho "'+b.device+'" está conectado à conta '+a.user.email+'. Pode voltar para o PS4.';$('f').style.display='none'}catch(err){msg.className='msg err';msg.textContent=err.message}finally{$('go').disabled=false}};</script></body></html>`}
+try{const r=await fetch(register?'/auth/register':'/auth/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:$('email').value,password:$('pass').value})});const a=await r.json();if(!r.ok)throw new Error(a.error||'Não deu para entrar.');lumeToken=a.token;
+const p=await fetch('/device/approve',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+lumeToken},body:JSON.stringify({code:$('code').value})});const b=await p.json();if(!p.ok)throw new Error(b.error||'Código inválido.');
+msg.className='msg ok';msg.textContent='Aparelho "'+b.device+'" conectado à conta '+a.user.email+'.';$('f').style.display='none';$('toggle').style.display='none';$('archive').hidden=false}catch(err){msg.className='msg err';msg.textContent=err.message}finally{$('go').disabled=false}};
+$('af').onsubmit=async e=>{e.preventDefault();const msg=$('amsg');msg.className='msg';msg.textContent='Autenticando no Archive…';$('ago').disabled=true;try{const r=await fetch('/archive/login',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+lumeToken},body:JSON.stringify({email:$('aemail').value,password:$('apass').value})});const b=await r.json();if(!r.ok)throw new Error(b.error||'Não foi possível entrar no Archive.');$('apass').value='';msg.className='msg ok';msg.textContent='Sessão do Archive salva. Você pode voltar ao PS4.';$('af').style.display='none'}catch(err){msg.className='msg err';msg.textContent=err.message}finally{$('ago').disabled=false}};
+$('skip').onclick=()=>{$('archive').hidden=true;$('msg').textContent+=' Pode voltar ao PS4.'};</script></body></html>`}
 
 const server=http.createServer(async(req,res)=>{try{
   const url=new URL(req.url,'http://localhost'),db=readDb();
@@ -138,7 +163,7 @@ const server=http.createServer(async(req,res)=>{try{
   if(req.method==='POST'&&url.pathname==='/auth/login'){if(limited(req,'auth',30))return json(res,429,{error:'Muitas tentativas. Espere alguns minutos.'});const input=await body(req),user=db.users.find(u=>u.email===String(input.email||'').trim().toLowerCase());if(!user)return json(res,401,{error:'Credenciais inválidas.'});const credentials=await hash(String(input.password||''),user.salt);if(!crypto.timingSafeEqual(Buffer.from(credentials.hash,'hex'),Buffer.from(user.hash,'hex')))return json(res,401,{error:'Credenciais inválidas.'});return json(res,200,{token:token(user.id),user:{id:user.id,email:user.email}})}
   if(req.method==='GET'&&url.pathname==='/me'){const value=auth(req,db);if(!value)return json(res,401,{error:'Sessão inválida.'});return json(res,200,{user:{id:value.user.id,email:value.user.email},device:value.dev||null})}
 
-  // ----- Sessão do Internet Archive (somente cookies exportados pelo Desktop; senha nunca passa pela API)
+  // ----- Sessão do Internet Archive (cookies cifrados; a senha nunca é armazenada)
   if(url.pathname==='/archive/session'){
     const value=auth(req,db);if(!value)return json(res,401,{error:'Sessão Lume inválida.'});
     if(req.method==='GET'){
@@ -148,6 +173,17 @@ const server=http.createServer(async(req,res)=>{try{
       const cookies=normalizeArchiveCookies(await body(req));await archiveWrite(value.user.id,cookies);return json(res,200,{ok:true,authenticated:true,savedAt:new Date().toISOString(),cookies:cookies.length});
     }
     if(req.method==='DELETE'){await fsp.rm(archiveFile(value.user.id),{force:true});return json(res,200,{ok:true,authenticated:false});}
+  }
+  // Login opcional pelo celular. A senha é enviada apenas ao endpoint xauthn do
+  // Archive durante esta chamada e descartada; somente os cookies resultantes são
+  // cifrados no volume do Railway.
+  if(req.method==='POST'&&url.pathname==='/archive/login'){
+    if(limited(req,'archive-login',8,15*60*1000))return json(res,429,{error:'Muitas tentativas de login no Archive. Espere alguns minutos.'});
+    const value=auth(req,db);if(!value)return json(res,401,{error:'Sessão Lume inválida.'});
+    const input=await body(req);const email=String(input.email||'').trim(),password=String(input.password||'');
+    if(!/^\S+@\S+\.\S+$/.test(email)||!password)return json(res,400,{error:'Informe o e-mail e a senha do Internet Archive.'});
+    try{const result=await archiveLogin(email,password);await archiveWrite(value.user.id,result.cookies);return json(res,200,{ok:true,authenticated:true,screenname:result.screenname||'',savedAt:new Date().toISOString()});}
+    catch(error){return json(res,error.status||502,{error:error.message||'Não foi possível autenticar no Internet Archive.'});}
   }
   if(req.method==='GET'&&url.pathname==='/archive/proxy')return archiveProxy(req,res,db,url);
 
