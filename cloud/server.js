@@ -133,6 +133,35 @@ async function keepOldVersion(id,name){const dir=path.join(userDir(id),'blobs'),
 const locks=new Map();
 function withLock(id,fn){const prev=locks.get(id)||Promise.resolve();const run=prev.then(fn,fn);locks.set(id,run.catch(()=>{}));return run}
 
+// ----- Atualização online do PS4: a versão mais nova publicada no GitHub (releases "ps4-v<versão>",
+// criadas por ps4-sdl-retro/tools/release/publicar-ps4.mjs com o PKG e o lume-ps4-update.json assinado).
+// O PS4 confere a assinatura com a chave pública que vai no app; aqui só repassamos o manifesto.
+const releaseRepo=process.env.LUME_RELEASE_REPO||'contatorockscoffee-arch/lume-games';
+const githubApi=process.env.LUME_GITHUB_API||'https://api.github.com';
+const emptyRelease={app:'Lume Games PS4',version:'0.0.0',url:'',content_id:'IV0000-LUME00003_00-LUMERETRO0000000',sha256:'',size:0};
+let releaseCache={at:0,data:null,pending:null};
+const versionKey=v=>String(v||'').split('.').map(n=>Number(n)||0);
+function newerVersion(a,b){const x=versionKey(a),y=versionKey(b);for(let i=0;i<4;i++){if((x[i]||0)!==(y[i]||0))return (x[i]||0)>(y[i]||0)}return false}
+async function fetchLatestPs4Release(){
+  const headers={accept:'application/vnd.github+json','user-agent':'lume-api'};if(process.env.GITHUB_TOKEN)headers.authorization='Bearer '+process.env.GITHUB_TOKEN;
+  const r=await fetch(githubApi+'/repos/'+releaseRepo+'/releases?per_page=50',{headers});if(!r.ok)throw new Error('GitHub '+r.status);
+  let best=null;
+  for(const rel of await r.json()){
+    if(rel.draft||rel.prerelease||!/^ps4-v\d+\.\d+\.\d+$/.test(rel.tag_name||''))continue;
+    const asset=(rel.assets||[]).find(a=>a.name==='lume-ps4-update.json');if(!asset)continue;
+    const v=rel.tag_name.slice(5);if(!best||newerVersion(v,best.v))best={v,asset};
+  }
+  if(!best)return emptyRelease;
+  const m=await (await fetch(best.asset.browser_download_url,{headers:{'user-agent':'lume-api'}})).json();
+  if(m.version!==best.v||!/^https:\/\//.test(m.url||'')||!/^[0-9a-f]{64}$/i.test(m.sha256||'')||!(m.size>0)||!/^[0-9a-f]{128}$/i.test(m.sig||''))throw new Error('manifesto inválido em ps4-v'+best.v);
+  return{app:'Lume Games PS4',version:m.version,url:m.url,content_id:m.content_id,sha256:m.sha256,size:m.size,sig:m.sig,notes:String(m.notes||'').slice(0,600)};
+}
+async function latestPs4Release(){
+  if(releaseCache.data&&Date.now()-releaseCache.at<60000)return releaseCache.data;
+  if(!releaseCache.pending)releaseCache.pending=fetchLatestPs4Release().then(d=>{releaseCache={at:Date.now(),data:d,pending:null};return d},e=>{console.error('release/latest:',e.message);releaseCache.pending=null;releaseCache.at=Date.now()-45000;return releaseCache.data||emptyRelease});
+  return releaseCache.pending;
+}
+
 function linkPage(code){const c=cleanCode(code).slice(0,6);return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conectar aparelho — Lume Games</title>
 <style>body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0d0b24;color:#eef;display:flex;min-height:100vh;align-items:center;justify-content:center}main{width:min(460px,92vw);background:#1a1740;border:1px solid #3b3480;border-radius:18px;padding:28px}h1{font-size:22px;margin:0 0 6px}h2{font-size:18px;margin:24px 0 6px}p{color:#b9b6e0;font-size:15px;line-height:1.45}label{display:block;font-size:13px;color:#b9b6e0;margin:14px 0 6px}input{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:10px;border:1px solid #4a43a0;background:#0f0d2c;color:#fff;font-size:16px}#code{font-size:26px;letter-spacing:6px;text-align:center;text-transform:uppercase}button{width:100%;margin-top:20px;padding:14px;border:0;border-radius:12px;background:#26e4f5;color:#081028;font-weight:700;font-size:16px}button.secondary{background:#302b62;color:#eef}a{color:#26e4f5}.msg{margin-top:16px;font-size:15px}.ok{color:#7ff0a8}.err{color:#ff8a9a}.panel{border-top:1px solid #3b3480;margin-top:24px;padding-top:4px}</style></head>
 <body><main><h1>Conectar aparelho</h1><p>Digite o código que aparece na tela do PS4 e entre na sua conta Lume. Os saves e os downloads autorizados passam a funcionar nesse aparelho.</p>
@@ -156,7 +185,11 @@ const server=http.createServer(async(req,res)=>{try{
   const url=new URL(req.url,'http://localhost'),db=readDb();
   if(req.method==='OPTIONS'){res.writeHead(204,CORS);return res.end()}
   if(req.method==='GET'&&url.pathname==='/health')return json(res,200,{ok:true,service:'lume-games-api'});
-  if(req.method==='GET'&&url.pathname==='/release/latest')return json(res,200,{app:'Lume Games PS4',version:process.env.LUME_LATEST_VERSION||'0.0.0',url:process.env.LUME_RELEASE_URL||'',content_id:process.env.LUME_RELEASE_CONTENT_ID||'IV0000-LUME00003_00-LUMERETRO0000000',sha256:process.env.LUME_RELEASE_SHA256||'',size:Number(process.env.LUME_RELEASE_SIZE)||0});
+  if(req.method==='GET'&&url.pathname==='/release/latest'){
+    // Variáveis LUME_LATEST_VERSION/LUME_RELEASE_URL (configuração manual antiga) continuam valendo se existirem.
+    if(process.env.LUME_LATEST_VERSION&&process.env.LUME_RELEASE_URL)return json(res,200,{app:'Lume Games PS4',version:process.env.LUME_LATEST_VERSION,url:process.env.LUME_RELEASE_URL,content_id:process.env.LUME_RELEASE_CONTENT_ID||'IV0000-LUME00003_00-LUMERETRO0000000',sha256:process.env.LUME_RELEASE_SHA256||'',size:Number(process.env.LUME_RELEASE_SIZE)||0,sig:process.env.LUME_RELEASE_SIG||''});
+    return json(res,200,await latestPs4Release());
+  }
   if(req.method==='GET'&&url.pathname==='/catalog')return json(res,200,{sources:[],message:'O catálogo permanece no dispositivo do usuário até que fontes autorizadas sejam configuradas.'});
   if(req.method==='GET'&&url.pathname==='/donations/config')return json(res,200,{url:donationUrl,message:'Apoie o projeto se desejar. A doação é opcional.'});
   if(req.method==='POST'&&url.pathname==='/auth/register'){if(limited(req,'auth',30))return json(res,429,{error:'Muitas tentativas. Espere alguns minutos.'});const input=await body(req),email=String(input.email||'').trim().toLowerCase(),password=String(input.password||'');if(!/^\S+@\S+\.\S+$/.test(email)||password.length<8)return json(res,400,{error:'E-mail ou senha inválidos (a senha precisa de 8 caracteres ou mais).'});if(db.users.some(u=>u.email===email))return json(res,409,{error:'Conta já cadastrada.'});const credentials=await hash(password);const user={id:crypto.randomUUID(),email,createdAt:new Date().toISOString(),...credentials};db.users.push(user);writeDb(db);return json(res,201,{token:token(user.id),user:{id:user.id,email}})}
